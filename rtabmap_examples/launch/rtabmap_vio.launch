@@ -118,7 +118,6 @@
   <arg name="odom_topic"               default="odom"/>          <!-- Odometry topic name -->
   <arg name="vo_frame_id"              default="$(arg vo_frame)"/> <!-- Visual/Icp odometry frame ID for TF -->
   <arg name="publish_tf_odom"          default="true"/>
-  <arg name="vo_publish_tf_odom"          default="false"/>
   <arg name="odom_tf_angular_variance" default="0.001"/>         <!-- If TF is used to get odometry, this is the default angular variance -->
   <arg name="odom_tf_linear_variance"  default="0.001"/>         <!-- If TF is used to get odometry, this is the default linear variance -->
   <arg name="odom_args"                default=""/>              <!-- More arguments for odometry (overwrite same parameters in rtabmap_args) -->
@@ -278,7 +277,7 @@
 
           <param name="frame_id"                    type="string" value="$(arg frame_id)"/>
           <param name="odom_frame_id"               type="string" value="$(arg vo_frame_id)"/>
-          <param name="publish_tf"                  type="bool"   value="$(arg vo_publish_tf_odom)"/>
+          <param name="publish_tf"                  type="bool"   value="$(arg publish_tf_odom)"/>
           <param name="ground_truth_frame_id"       type="string" value="$(arg ground_truth_frame_id)"/>
           <param name="ground_truth_base_frame_id"  type="string" value="$(arg ground_truth_base_frame_id)"/>
           <param name="wait_for_transform_duration" type="double" value="$(arg wait_for_transform)"/>
@@ -294,6 +293,8 @@
           <param name="expected_update_rate"        type="double" value="$(arg odom_expected_rate)"/>
           <param name="max_update_rate"             type="double" value="$(arg odom_max_rate)"/>
           <param name="keep_color"                  type="bool"   value="$(arg use_odom_features)"/>
+            <param name="Odom/FillInfoData"      type="string" value="true"/>
+            <param name="Odom/ResetCountdown"    type="string" value="1"/>
         </node>
       </group>
     </group>
