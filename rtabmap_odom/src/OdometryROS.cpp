@@ -50,6 +50,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rtabmap/utilite/UFile.h"
 #include "rtabmap/utilite/UMath.h"
 
+
 #define BAD_COVARIANCE 9999
 
 using namespace rtabmap;
@@ -105,8 +106,10 @@ void OdometryROS::onInit()
 {
 	ros::NodeHandle & nh = getNodeHandle();
 	ros::NodeHandle & pnh = getPrivateNodeHandle();
-
+	
+	ros::NodeHandle nh1("");
 	odomPub_ = nh.advertise<nav_msgs::Odometry>("odom", 1);
+	pose_pub = nh1.advertise<geometry_msgs::PoseWithCovarianceStamped>("/set_pose", 10);
 	odomInfoPub_ = nh.advertise<rtabmap_msgs::OdomInfo>("odom_info", 1);
 	odomInfoLitePub_ = nh.advertise<rtabmap_msgs::OdomInfo>("odom_info_lite", 1);
 	odomLocalMap_ = nh.advertise<sensor_msgs::PointCloud2>("odom_local_map", 1);
@@ -493,7 +496,6 @@ void OdometryROS::processData(SensorData & data, const std_msgs::Header & header
 	}
 
 	//NODELET_WARN("img callback: process image %f", stamp.toSec());
-
 	Transform groundTruth;
 	if(!data.imageRaw().empty() || !data.laserScanRaw().isEmpty())
 	{
@@ -520,7 +522,7 @@ void OdometryROS::processData(SensorData & data, const std_msgs::Header & header
 					1.0/(header.stamp.toSec()-previousStamp_), expectedUpdateRate_, previousStamp_, header.stamp.toSec());
 			return;
 		}
-
+		
 		if(!groundTruthFrameId_.empty())
 		{
 			groundTruth = rtabmap_conversions::getTransform(groundTruthFrameId_, groundTruthBaseFrameId_, header.stamp, this->tfListener(), this->waitForTransformDuration());
@@ -547,6 +549,23 @@ void OdometryROS::processData(SensorData & data, const std_msgs::Header & header
 								groundTruthFrameId_.c_str(),
 								groundTruthBaseFrameId_.c_str());
 						odometry_->reset(groundTruth);
+						// Update robot localisation with ground truth
+						
+						geometry_msgs::TransformStamped initPoseMsg;
+						rtabmap_conversions::transformToGeometryMsg(groundTruth, initPoseMsg.transform);
+						
+
+						// Create a pose message
+						static geometry_msgs::PoseWithCovarianceStamped pose_msg;
+						pose_msg.header.stamp = ros::Time::now();
+						pose_msg.header.frame_id = "odom";
+						pose_msg.pose.pose.position.x = initPoseMsg.transform.translation.x;
+						pose_msg.pose.pose.position.y = initPoseMsg.transform.translation.y;
+						pose_msg.pose.pose.position.z = initPoseMsg.transform.translation.z;
+						pose_msg.pose.pose.orientation = initPoseMsg.transform.rotation;
+
+						// Publish the pose message
+						pose_pub.publish(pose_msg);
 					}
 				}
 			}

@@ -45,6 +45,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <boost/thread.hpp>
 
 #include "rtabmap_util/ULogToRosout.h"
+#include <rtabmap/core/Transform.h>
+#include <tf2_ros/static_transform_broadcaster.h>
 
 namespace rtabmap {
 class Odometry;
@@ -116,6 +118,7 @@ private:
 	bool publishNullWhenLost_;
 	rtabmap::ParametersMap parameters_;
 
+	ros::Publisher pose_pub;
 	ros::Publisher odomPub_;
 	ros::Publisher odomInfoPub_;
 	ros::Publisher odomInfoLitePub_;
@@ -132,6 +135,7 @@ private:
 	ros::ServiceServer setLogWarnSrv_;
 	ros::ServiceServer setLogErrorSrv_;
 	tf2_ros::TransformBroadcaster tfBroadcaster_;
+	tf2_ros::StaticTransformBroadcaster static_broadcaster;
 	tf::TransformListener tfListener_;
 	ros::Subscriber imuSub_;
 
