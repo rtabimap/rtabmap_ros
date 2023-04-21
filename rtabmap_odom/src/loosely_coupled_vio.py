@@ -1,6 +1,9 @@
 import rospy
 from sensor_msgs.msg import Imu
 from nav_msgs.msg import Odometry
+from tf.msg import tfMessage
+from tf.transformations import quaternion_matrix
+
 
 from filterpy.kalman import KalmanFilter
 import numpy as np
@@ -9,11 +12,41 @@ from scipy.spatial.transform import Rotation
 
 delta_t = 0.1 # TODO hardcoded, update with message timestamps in subscriber, and all corresponding places where this is getting used
 
-imu_tf = None
+# imu_tf = None # Just need to get the transform for IMU to baselink, rotation matrix
+imu_tf = np.eye(3)
 
 filter = KalmanFilter(12, 12, 6)
 
 publisher = None
+
+def update_imu_tf(tf_message):
+    global imu_tf
+    
+    if (tf_message.child_frame_id == "/imu_base_link"):
+        
+        # collect the rotation quaternion
+        quat = tf_message.transforms[0].transform.rotation
+
+        # Build an array with the quaternion values
+        quat_array = [0,0,0,0]
+        quat_array[0] = quat.x
+        quat_array[1] = quat.y
+        quat_array[2] = quat.z
+        quat_array[3] = quat.w
+
+        # Update imu_tf with the new quaternion
+        imu_tf = quaternion_matrix(quat)
+
+
+#** Outline of what this node does**#
+# This node will take in two types of measurements / estimates
+# a) the imu data
+# b) the stereo odometry estimate from VO
+# 
+# We will use the IMU data in place of the motion model to predict where we have moved at a high frequency
+# At a lower frequency, the VO odometry estimate will be used to correct / update our prediction
+# In other words, a normal Kalman Filter.
+
 
 def vio_node():
     global filter
@@ -23,6 +56,7 @@ def vio_node():
     rospy.init_node('vio_node')
     rospy.Subscriber('/imu/data', Imu, integrate_state)
     rospy.Subscriber('/rtabmap/stereo_odometry', Odometry, update_state)
+    rospy.Subscriber('/tf', tfMessage, update_imu_tf)
     publisher = rospy.Publisher('/odometry_filtered', Odometry)
 
     # state defined as : x,y,z,phi,theta,psi, x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot
@@ -108,6 +142,7 @@ def integrate_state(imu_msg):
     w_accns = imu_tf @ np.array([x_ddot, y_ddot, z_ddot]).reshape(-1,1) - np.array([0,0,9.8])
     imu_input = np.concatenate([w_accns, w_ang_vel])
     # update filterpy.Q (process noise matrix)
+
     Q = np.eye(12) #TODO may want to update other elements of measurement covariances too
     # TODO: not using the imu acceleration covariance data, how can we incorporate it?
     Q[-3:, -3] = ang_vel_cov
