@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>rtabmap_util</name>
-  <version>0.21.0</version>
+  <version>0.21.1</version>
   <description>RTAB-Map's various useful nodes and nodelets.</description>
   <maintainer email="matlabbe@gmail.com">Mathieu Labbe</maintainer>
   <author>Mathieu Labbe</author>
@@ -14,8 +14,10 @@
   <depend>cv_bridge</depend>
   <depend>image_transport</depend>
   <depend>roscpp</depend>
+  <depend>nav_msgs</depend>
   <depend>octomap_msgs</depend>
   <depend>sensor_msgs</depend>
+  <depend>stereo_msgs</depend>
   <depend>std_msgs</depend>
   <depend>tf</depend>
   <depend>laser_geometry</depend>

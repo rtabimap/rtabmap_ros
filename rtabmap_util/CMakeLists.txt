@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5)
 project(rtabmap_util)
 
 find_package(catkin REQUIRED COMPONENTS
-             cv_bridge image_transport roscpp sensor_msgs std_msgs    
+             cv_bridge image_transport roscpp nav_msgs sensor_msgs stereo_msgs std_msgs
              tf laser_geometry pcl_conversions pcl_ros nodelet message_filters
              pluginlib rtabmap_msgs rtabmap_conversions
 )
@@ -18,7 +18,7 @@ ENDIF(octomap_msgs_FOUND)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES rtabmap_util_plugins
-  CATKIN_DEPENDS cv_bridge image_transport roscpp sensor_msgs std_msgs    
+  CATKIN_DEPENDS cv_bridge image_transport roscpp nav_msgs sensor_msgs stereo_msgs std_msgs
              tf laser_geometry pcl_conversions pcl_ros nodelet message_filters
              pluginlib rtabmap_msgs rtabmap_conversions ${optional_dependencies}
 )
@@ -131,6 +131,7 @@ catkin_install_python(PROGRAMS
   scripts/yaml_to_camera_info.py
   scripts/netvlad_tf_ros.py
   scripts/gazebo_ground_truth.py
+  scripts/metrics.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
