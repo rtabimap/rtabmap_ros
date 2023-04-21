@@ -74,6 +74,10 @@ set_target_properties(rtabmap_icp_odometry PROPERTIES OUTPUT_NAME "icp_odometry"
 ## Install ##
 #############
 
+catkin_install_python(PROGRAMS
+  src/loosely_coupled_vio.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
 install(TARGETS 
    rtabmap_odom
    rtabmap_odom_plugins 
