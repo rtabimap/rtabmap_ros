@@ -26,7 +26,13 @@ class LooselyCoupledKF:
 
         # Create a transform broadcaster
         self.odom_tf_broadcaster = tf.TransformBroadcaster()
-        
+
+        # Create filtered odometry message
+        self.filtered_state = Odometry()
+        self.filtered_state.child_frame_id = "base_link"
+        self.filtered_state.header.frame_id = "odom"
+        self.filtered_state.header.seq = 0
+
         self.imu_sub = rospy.Subscriber('/imu/data', Imu, self.integrate_state)
         self.vo_sub = rospy.Subscriber('/vo', Odometry, self.update_state)
         self.vio_publisher = rospy.Publisher('/odometry/filtered', Odometry, queue_size=10)
@@ -209,35 +215,40 @@ class LooselyCoupledKF:
         new_state = self.filter.x
         new_cov = self.filter.P
 
-        rot = Rotation.from_euler('xyz', [new_state[3], new_state[4], new_state[5]])
-        quaternion = rot.as_quat()
-
-        filtered_state = Odometry()
-        filtered_state.pose.pose.position.x = new_state[0]
-        filtered_state.pose.pose.position.y = new_state[1]
-        filtered_state.pose.pose.position.z = new_state[2]
-        filtered_state.pose.pose.orientation.x = quaternion[0]
-        filtered_state.pose.pose.orientation.y = quaternion[1]
-        filtered_state.pose.pose.orientation.z = quaternion[2]
-        filtered_state.pose.pose.orientation.w = quaternion[3]
-        filtered_state.pose.covariance = new_cov[:6,:6].flatten()
-        filtered_state.twist.twist.linear.x = new_state[6]
-        filtered_state.twist.twist.linear.y = new_state[7]
-        filtered_state.twist.twist.linear.z = new_state[8]
-        filtered_state.twist.twist.angular.x = new_state[9]
-        filtered_state.twist.twist.angular.y = new_state[10]
-        filtered_state.twist.twist.angular.z = new_state[11]
-        filtered_state.twist.covariance = new_cov[6:,6:].flatten()
-
-        # TODO: add appropriate header with timestamps and frame ids
-        filtered_state.header = odom_msg.header
-        filtered_state.child_frame_id = odom_msg.child_frame_id
-
-        self.vio_publisher.publish(filtered_state)
+        # Publish odom
+        self.publish_odom(new_state,new_cov)    
 
         # Publish it to tf
         self.publish_tf(new_state)
     
+    def publish_odom(self,state, cov):
+
+        rot = Rotation.from_euler('xyz', [state[3], state[4], state[5]])
+        quaternion = rot.as_quat()
+
+        self.filtered_state.header.seq += 1
+        filtered_state = self.filtered_state
+        filtered_state.pose.pose.position.x = state[0]
+        filtered_state.pose.pose.position.y = state[1]
+        filtered_state.pose.pose.position.z = state[2]
+        filtered_state.pose.pose.orientation.x = quaternion[0]
+        filtered_state.pose.pose.orientation.y = quaternion[1]
+        filtered_state.pose.pose.orientation.z = quaternion[2]
+        filtered_state.pose.pose.orientation.w = quaternion[3]
+        filtered_state.pose.covariance = cov[:6,:6].flatten()
+        filtered_state.twist.twist.linear.x = state[6]
+        filtered_state.twist.twist.linear.y = state[7]
+        filtered_state.twist.twist.linear.z = state[8]
+        filtered_state.twist.twist.angular.x = state[9]
+        filtered_state.twist.twist.angular.y = state[10]
+        filtered_state.twist.twist.angular.z = state[11]
+        filtered_state.twist.covariance = cov[6:,6:].flatten()
+
+        # TODO: add appropriate header with timestamps and frame ids
+        filtered_state.header.stamp = rospy.Time.now()
+
+        self.vio_publisher.publish(filtered_state)
+
     def publish_tf(self, state):
 
         rot = Rotation.from_euler('xyz', [state[3], state[4], state[5]])
