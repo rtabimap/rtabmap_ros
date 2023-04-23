@@ -73,27 +73,26 @@ class LooselyCoupledKF:
 
         # TODO UPDATE THIS WITH ACTUAL TRANSFORM!!!!!!!!!!!!!!
         # imu to VO tf
-        self.imu_tf = np.eye(3)
+        self.imu_tf = np.eye(4)
+        self.update_imu_tf()
+        print("IMU static tf: ", self.imu_tf)
 
         rospy.loginfo("Starting KF")
 
 
-    def update_imu_tf(self, tf_message):
-    
-        if (tf_message.child_frame_id == "imu4"):
-            
-            # collect the rotation quaternion
-            quat = tf_message.transforms[0].transform.rotation
+    def update_imu_tf(self):
+        try:
+            now = rospy.Time.now()
+            rospy.loginfo("Waiting for imu tf...")
+            self.tf_listener.waitForTransform("/base_link", "/imu4", now, rospy.Duration(10.0))
+            (trans, rot) = self.tf_listener.lookupTransform('/base_link', '/imu4', rospy.Time(0))
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            rospy.logwarn("Could not get imu. Skipping.")
+            return
 
-            # Build an array with the quaternion values
-            quat_array = [0,0,0,0]
-            quat_array[0] = quat.x
-            quat_array[1] = quat.y
-            quat_array[2] = quat.z
-            quat_array[3] = quat.w
-
-            # Update imu_tf with the new quaternion
-            imu_tf = quaternion_matrix(quat)
+        rot_mat = Rotation.from_quat(rot).as_matrix()
+        self.imu_tf[:3, :3] = rot_mat
+        self.imu_tf[:3, 3] = trans
 
 
     def integrate_state(self, imu_msg):
@@ -135,7 +134,8 @@ class LooselyCoupledKF:
         w_ang_vel = ang_vel_tf @ np.array([theta_dot, phi_dot, psi_dot]).reshape(-1,1)
 
         # getting world frame accns
-        w_accns = self.imu_tf @ np.array([x_ddot, y_ddot, z_ddot]).reshape(-1,1) + np.array([0,0,9.8]).reshape(-1,1)
+        w_accns = self.imu_tf @ np.array([x_ddot, y_ddot, z_ddot, 1]).reshape(-1,1) + np.array([0,0,9.8,0]).reshape(-1,1)
+        w_accns = w_accns[:-1]
         imu_input = np.concatenate([w_accns, w_ang_vel]).squeeze(-1)
         # update filterpy.Q (process noise matrix)
         Q = np.eye(12) #TODO may want to update other elements of measurement covariances too
