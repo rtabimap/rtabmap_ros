@@ -42,6 +42,7 @@ class LooselyCoupledKF:
 
         # state defined as : x,y,z,phi,theta,psi, x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot
         self.filter.x = np.zeros((12,))
+        #self.initialise_with_ground_truth()
         rospy.loginfo("Created state of size {}".format(self.filter.x.shape[0]))
 
         # State transition matrix (one that takes previous state to this one in this timestep)
@@ -87,6 +88,27 @@ class LooselyCoupledKF:
         print("IMU static tf: ", self.imu_tf)
 
         rospy.loginfo("Starting KF")
+
+    def initialise_with_ground_truth(self):
+        print("Updating initial state with ground truth!")
+
+        try:
+            now = rospy.Time.now()
+            rospy.loginfo("Waiting for ground truth tf...")
+            self.tf_listener.waitForTransform("/base_link_gt", "/world", now, rospy.Duration(10.0))
+            (trans, rot) = self.tf_listener.lookupTransform('/base_link_gt', '/world', rospy.Time(0))
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            rospy.logwarn("Could not get ground truth. Skipping.")
+            return
+
+        self.filter.x[0] = trans[0]
+        self.filter.x[1] = trans[1]
+        self.filter.x[2] = trans[2]
+        
+        rot_euler = Rotation.from_quat(rot).as_euler('xyz') # TODO check roll,pitch, yaw mapping
+        self.filter[3] = rot_euler[0]
+        self.filter[4] = rot_euler[1]
+        self.filter[5] = rot_euler[2]
 
 
     def update_imu_tf(self):
