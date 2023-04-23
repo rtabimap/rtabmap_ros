@@ -8,7 +8,7 @@ from tf.transformations import quaternion_matrix
 
 from filterpy.kalman import KalmanFilter
 import numpy as np
-
+from geometry_msgs.msg import TransformStamped
 from scipy.spatial.transform import Rotation
 
 class LooselyCoupledKF:
@@ -24,6 +24,9 @@ class LooselyCoupledKF:
     def __init__(self) -> None:
         delta_t = 0.05 # TODO hardcoded, update with message timestamps in subscriber, and all corresponding places where this is getting used
 
+        # Create a transform broadcaster
+        self.odom_tf_broadcaster = tf.TransformBroadcaster()
+        
         self.imu_sub = rospy.Subscriber('/imu/data', Imu, self.integrate_state)
         self.vo_sub = rospy.Subscriber('/vo', Odometry, self.update_state)
         self.vio_publisher = rospy.Publisher('/odometry/filtered', Odometry, queue_size=10)
@@ -231,6 +234,30 @@ class LooselyCoupledKF:
         filtered_state.child_frame_id = odom_msg.child_frame_id
 
         self.vio_publisher.publish(filtered_state)
+
+        # Publish it to tf
+        self.publish_tf(new_state)
+    
+    def publish_tf(self, state):
+
+        rot = Rotation.from_euler('xyz', [state[3], state[4], state[5]])
+        quaternion = rot.as_quat()
+
+        # Create a transform message
+        transform = TransformStamped()
+        transform.header.stamp = rospy.Time.now()
+        transform.header.frame_id = "odom"
+        transform.child_frame_id = "base_link"
+        transform.transform.translation.x = state[0]
+        transform.transform.translation.y = state[1]
+        transform.transform.translation.z = state[2]
+        transform.transform.rotation.x = quaternion[0]
+        transform.transform.rotation.y = quaternion[1]
+        transform.transform.rotation.z = quaternion[2]
+        transform.transform.rotation.w = quaternion[3]
+
+        # Publish the transform
+        self.odom_tf_broadcaster.sendTransformMessage(transform)
 
 
 if __name__ == '__main__':
