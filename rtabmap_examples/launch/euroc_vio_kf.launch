@@ -104,8 +104,8 @@ Examples:
    <param name="publish_tf" value="false"/>
 </node>
 
-<node pkg="rtabmap_odom" type="loosely_coupled_vio.py" name="vio_node">
-</node>
+<!-- <node pkg="rtabmap_odom" type="loosely_coupled_vio.py" name="vio_node">
+</node> -->
 
 <!-- RTAB-Map -->
 <include file="$(find rtabmap_examples)/launch/rtabmap_vio.launch">
