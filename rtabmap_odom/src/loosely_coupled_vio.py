@@ -107,9 +107,9 @@ class LooselyCoupledKF:
         self.filter.x[2] = trans[2]
         
         rot_euler = Rotation.from_quat(rot).as_euler('xyz') # TODO check roll,pitch, yaw mapping
-        self.filter[3] = rot_euler[0]
-        self.filter[4] = rot_euler[1]
-        self.filter[5] = rot_euler[2]
+        self.filter.x[3] = rot_euler[0]
+        self.filter.x[4] = rot_euler[1]
+        self.filter.x[5] = rot_euler[2]
 
 
     def update_imu_tf(self):
