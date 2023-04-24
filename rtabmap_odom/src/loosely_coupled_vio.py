@@ -22,7 +22,7 @@ class LooselyCoupledKF:
     # In other words, a normal Kalman Filter.
 
     def __init__(self) -> None:
-        delta_t = 0.05 # TODO hardcoded, update with message timestamps in subscriber, and all corresponding places where this is getting used
+        delta_t = 0.005 # TODO hardcoded, update with message timestamps in subscriber, and all corresponding places where this is getting used
 
         # Create a transform broadcaster
         self.odom_tf_broadcaster = tf.TransformBroadcaster()
@@ -33,7 +33,7 @@ class LooselyCoupledKF:
         self.filtered_state.header.frame_id = "odom"
         self.filtered_state.header.seq = 0
 
-        self.imu_sub = rospy.Subscriber('/imu/data', Imu, self.integrate_state)
+        # self.imu_sub = rospy.Subscriber('/imu/data', Imu, self.integrate_state)
         self.vo_sub = rospy.Subscriber('/vo', Odometry, self.update_state)
         self.vio_publisher = rospy.Publisher('/odometry/filtered', Odometry, queue_size=10)
         self.tf_listener = tf.TransformListener()
@@ -42,30 +42,31 @@ class LooselyCoupledKF:
 
         # state defined as : x,y,z,phi,theta,psi, x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot
         self.filter.x = np.zeros((12,))
+        self.filter.x[:3] = [4.349, 1.805, -1.008]
         #self.initialise_with_ground_truth()
         rospy.loginfo("Created state of size {}".format(self.filter.x.shape[0]))
 
         # State transition matrix (one that takes previous state to this one in this timestep)
         F = np.eye(12)
-        F[0,6] = delta_t
-        F[1, 7] = delta_t
-        F[2, 8] = delta_t
-        F[6, 9] = delta_t
-        F[7, 10] = delta_t
-        F[8, 11] = delta_t
-        F[9, :] = 0
-        F[10, :] = 0
-        F[11, :] = 0
+        # F[0,6] = delta_t 
+        # F[1, 7] = delta_t
+        # F[2, 8] = delta_t
+        # F[6, 9] = delta_t
+        # F[7, 10] = delta_t
+        # F[8, 11] = delta_t
+        # # F[9, :] = 0
+        # # F[10, :] = 0
+        # # F[11, :] = 0
         self.filter.F = F
 
         # current state covariance matrix (keeps getting updated with state estimate)
         self.filter.P = np.eye(12) #TODO can update the initialization here
 
         # Measurement noise matrix
-        self.filter.R = np.eye(6) #TODO some tuning here
+        self.filter.R = 1e-6 * np.eye(6) #TODO some tuning here
 
         # process noise matrix
-        self.filter.Q = np.eye(12)
+        self.filter.Q = 1e6 * np.eye(12)
 
         # Measurement function (gets the state from odometry measurements)
         H = np.eye(12)
@@ -73,20 +74,20 @@ class LooselyCoupledKF:
 
         # Control transition matrix (gets state update from imu input)
         B = np.zeros((12, 6))
-        B[6, 0] = delta_t
-        B[7, 1] = delta_t
-        B[8, 2] = delta_t
-        B[9, 3] = 1
-        B[10, 3] = 1
-        B[11, 3] = 1
+        # B[6, 0] = delta_t
+        # B[7, 1] = delta_t
+        # B[8, 2] = delta_t
+        # B[9, 3] = 1
+        # B[10, 3] = 1
+        # B[11, 3] = 1
         self.filter.B = B
 
         # TODO UPDATE THIS WITH ACTUAL TRANSFORM!!!!!!!!!!!!!!
         # imu to VO tf
         self.imu_tf = np.eye(4)
         self.update_imu_tf()
-        print("IMU static tf: ", self.imu_tf)
 
+        print("IMU static tf: ", self.imu_tf)
         rospy.loginfo("Starting KF")
 
     def initialise_with_ground_truth(self):
@@ -192,16 +193,16 @@ class LooselyCoupledKF:
         odom_y = odom_msg.pose.pose.position.y
         odom_z = odom_msg.pose.pose.position.z
         odom_quat_x = odom_msg.pose.pose.orientation.x
-        odom_quat_y= odom_msg.pose.pose.orientation.y
+        odom_quat_y = odom_msg.pose.pose.orientation.y
         odom_quat_z = odom_msg.pose.pose.orientation.z
         odom_quat_w = odom_msg.pose.pose.orientation.w
         odom_pose_cov = np.array([odom_msg.pose.covariance]).reshape(6,6)
         odom_x_dot = odom_msg.twist.twist.linear.x
         odom_y_dot = odom_msg.twist.twist.linear.y
         odom_z_dot = odom_msg.twist.twist.linear.z
-        odom_twist_theta = odom_msg.twist.twist.angular.x
-        odom_twist_phi = odom_msg.twist.twist.angular.y
-        odom_twist_psi = odom_msg.twist.twist.angular.z
+        odom_twist_x = odom_msg.twist.twist.angular.x
+        odom_twist_y = odom_msg.twist.twist.angular.y
+        odom_twist_z = odom_msg.twist.twist.angular.z
         odom_twist_cov = np.array([odom_msg.twist.covariance]).reshape(6,6)
 
         if (np.linalg.norm([odom_quat_x, odom_quat_y, odom_quat_z, odom_quat_w]) < 0.8):
@@ -213,34 +214,45 @@ class LooselyCoupledKF:
         # input
         z = np.zeros((12,))
 
-        z[0] = odom_x
-        z[1] = odom_y
-        z[2] = odom_z
+        scale = 1
+
+        z[0] = odom_x * scale
+        z[1] = odom_y * scale
+        z[2] = odom_z * scale
         z[3] = odom_euler[0]
-        z[4] = odom_euler[1]
+        z[4] = odom_euler[1] # TODO: These odom_euler angeles need to be kept within the appropriate ranges
         z[5] = odom_euler[2]
         z[6] = odom_x_dot
         z[7] = odom_y_dot
         z[8] = odom_z_dot
-        z[9] = odom_twist_theta
-        z[10] = odom_twist_phi
-        z[11] = odom_twist_psi
+        z[9] = odom_twist_x
+        z[10] = odom_twist_y
+        z[11] = odom_twist_z
 
         # measurement noise matrix
 
-        R = np.eye(12)
-        R[:6, :6] = odom_pose_cov
-        R[6:,6:] = odom_twist_cov
+        R = 1e-6 * np.eye(12)
+        # R[:6, :6] = odom_pose_cov # TODO: Can this be copied like this if the noise was in quaternion?
+        # R[6:,6:] = odom_twist_cov 
 
-        self.filter.update(z= z, R=R)
+        # print(R)
+        # print()
 
+
+
+        # return
+        self.filter.update(z=z, R=R)
+
+        # self.filter.x = z
         new_state = self.filter.x
         new_cov = self.filter.P
 
         # Publish odom
+        # self.publish_odom(z,R)
         self.publish_odom(new_state,new_cov)    
 
         # Publish it to tf
+        # self.publish_tf(z)
         self.publish_tf(new_state)
     
     def publish_odom(self,state, cov):
@@ -281,6 +293,8 @@ class LooselyCoupledKF:
         transform.header.stamp = rospy.Time.now()
         transform.header.frame_id = "odom"
         transform.child_frame_id = "base_link"
+        # transform.header.frame_id = "base_link"
+        # transform.child_frame_id = "odom"
         transform.transform.translation.x = state[0]
         transform.transform.translation.y = state[1]
         transform.transform.translation.z = state[2]
