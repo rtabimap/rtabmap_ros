@@ -33,7 +33,7 @@ class LooselyCoupledKF:
         self.filtered_state.header.frame_id = "odom"
         self.filtered_state.header.seq = 0
 
-        # self.imu_sub = rospy.Subscriber('/imu/data', Imu, self.integrate_state)
+        self.imu_sub = rospy.Subscriber('/imu/data', Imu, self.integrate_state)
         self.vo_sub = rospy.Subscriber('/vo', Odometry, self.update_state)
         self.vio_publisher = rospy.Publisher('/odometry/filtered', Odometry, queue_size=10)
         self.tf_listener = tf.TransformListener()
@@ -42,44 +42,49 @@ class LooselyCoupledKF:
 
         # state defined as : x,y,z,phi,theta,psi, x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot
         self.filter.x = np.zeros((12,))
-        self.filter.x[:3] = [4.349, 1.805, -1.008]
-        #self.initialise_with_ground_truth()
+        # self.filter.x[:3] = [4.349, 1.805, -1.008]
+        # self.initialise_with_ground_truth()
         rospy.loginfo("Created state of size {}".format(self.filter.x.shape[0]))
 
         # State transition matrix (one that takes previous state to this one in this timestep)
+        # F = np.zeros((12,12))
         F = np.eye(12)
-        # F[0,6] = delta_t 
-        # F[1, 7] = delta_t
-        # F[2, 8] = delta_t
-        # F[6, 9] = delta_t
-        # F[7, 10] = delta_t
-        # F[8, 11] = delta_t
-        # # F[9, :] = 0
-        # # F[10, :] = 0
-        # # F[11, :] = 0
+        F[0,6] = delta_t 
+        F[1, 7] = delta_t
+        F[2, 8] = delta_t
+        F[3, 9] = delta_t
+        F[4, 10] = delta_t
+        F[5, 11] = delta_t
+        F[6,6] = 0
+        F[7,7] = 0
+        F[8,8] = 0
         self.filter.F = F
 
         # current state covariance matrix (keeps getting updated with state estimate)
-        self.filter.P = np.eye(12) #TODO can update the initialization here
+        self.filter.P = 1e-10 * np.eye(12) #TODO can update the initialization here
 
         # Measurement noise matrix
-        self.filter.R = 1e-6 * np.eye(6) #TODO some tuning here
+        self.filter.R = 1e-10 * np.eye(6) #TODO some tuning here
 
         # process noise matrix
-        self.filter.Q = 1e6 * np.eye(12)
+        self.filter.Q = 1e-10 * np.eye(12)
 
         # Measurement function (gets the state from odometry measurements)
         H = np.eye(12)
         self.filter.H = H
 
         # Control transition matrix (gets state update from imu input)
+        # B = np.eye(12)
         B = np.zeros((12, 6))
-        # B[6, 0] = delta_t
-        # B[7, 1] = delta_t
-        # B[8, 2] = delta_t
-        # B[9, 3] = 1
-        # B[10, 3] = 1
-        # B[11, 3] = 1
+        B[0,0] = 0.5 * delta_t**2
+        B[1,1] = 0.5 * delta_t**2
+        B[2,2] = 0.5 * delta_t**2
+        B[6, 0] = delta_t
+        B[7, 1] = delta_t
+        B[8, 2] = delta_t
+        B[9, 3] = 1
+        B[10, 4] = 1
+        B[11, 5] = 1
         self.filter.B = B
 
         # TODO UPDATE THIS WITH ACTUAL TRANSFORM!!!!!!!!!!!!!!
@@ -110,6 +115,18 @@ class LooselyCoupledKF:
         self.filter.x[3] = rot_euler[0]
         self.filter.x[4] = rot_euler[1]
         self.filter.x[5] = rot_euler[2]
+
+
+    
+    
+    def prevent_wrap_around(self, x, y, z):
+        # first and last angle should be -180 to 180
+        # middle one is -90 to 90
+
+        x_new = x % (2* np.pi) 
+        if (x_new > np.pi):
+            x_new = - (2*np.pi)
+
 
 
     def update_imu_tf(self):
@@ -175,6 +192,12 @@ class LooselyCoupledKF:
         Q[-3:, -3:] = ang_vel_cov
 
         self.filter.predict(u=imu_input, Q=Q)
+        temp_rot = Rotation.from_euler('xyz', [self.filter.x[3], self.filter.x[4], self.filter.x[5]])
+        new_rot = temp_rot.as_euler('xyz')
+        self.filter.x[3] = new_rot[0]
+        self.filter.x[4] = new_rot[1]
+        self.filter.x[5] = new_rot[2]
+
 
     def update_state(self, odom_msg):
         '''
@@ -240,19 +263,29 @@ class LooselyCoupledKF:
 
 
 
+        # handle possible rollovers
+        temp_rot = Rotation.from_euler('xyz', [self.filter.x[3], self.filter.x[4], self.filter.x[5]])
+        new_rot = temp_rot.as_euler('xyz')
+        self.filter.x[3] = new_rot[0]
+        self.filter.x[4] = new_rot[1]
+        self.filter.x[5] = new_rot[2]
+
         # return
         self.filter.update(z=z, R=R)
+
+
 
         # self.filter.x = z
         new_state = self.filter.x
         new_cov = self.filter.P
 
+        
         # Publish odom
-        # self.publish_odom(z,R)
+        # self.publish_odom(z,R) # JUST VO
         self.publish_odom(new_state,new_cov)    
 
         # Publish it to tf
-        # self.publish_tf(z)
+        # self.publish_tf(z) 
         self.publish_tf(new_state)
     
     def publish_odom(self,state, cov):
